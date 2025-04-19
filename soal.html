@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ujian Soal</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* Sidebar and content layout */
+    #sidebar { transition: transform .3s ease; transform: translate(0,0);}    
+    #sidebar.collapsed { transform: translateX(-100%);}    
+    @media (max-width: 991.98px) {#sidebar.collapsed {transform: translateY(-100%);}    
+      #sidebar { width: 100% !important; position: sticky; top: 0; z-index: 1020; }
+      #q-buttons { display: grid; grid-template-columns: repeat(10, 1fr); gap: .1rem; }
+      #q-buttons button { width: 100%; aspect-ratio: 1; margin: 0; }
+    }
+    #content { transition: margin .3s ease; }
+    #content.expanded { margin-left: 0; }
+    /* Question buttons uniform squares, desktop 4 per row */
+    @media (min-width: 992px) {#q-buttons button { width: calc(25% - .5rem); }}
+    /* Countdown box styling */
+    .countdown-box { background: #000; color: #fff; padding: .5rem 1rem; border-radius: .25rem; display: inline-block; }
+    /* Fixed toggle outside sidebar */
+    #toggle-btn { position: fixed; z-index: 1100; top: .5rem; left: .5rem; }
+    /* Fixed footer */
+    footer.fixed-footer { position: fixed; bottom: 0; width: 100%; background: #f8f9fa; text-align: center; padding: .5rem 0; z-index: 1030; }
+  </style>
+</head>
+<body>
+
+  <div class="d-flex flex-column flex-lg-row vh-100">
+    <nav id="sidebar" class="bg-light border-end" style="width:200px;">
+      <div class="p-2 d-flex justify-content-between align-items-center border-bottom">
+        <strong>Soal</strong>
+        <button id="toggle-btn" class="btn btn-sm btn-outline-secondary">☰</button>
+      </div>
+      <div id="q-buttons" class="p-2 d-flex flex-wrap gap-1 bg-white"></div>
+    </nav>
+    <div id="content" class="flex-fill p-3 expanded overflow-auto">
+      <header class="mb-4">
+        <h3 class="text-center">Uji Kesetaraan Tahun Pelajaran 2024/2025</h3>
+        <div class="row mt-3">
+          <div class="col-12 col-md-6">
+            <p class="mb-1">Mata Pelajaran: <strong><span id="hdr-mapel"></span></strong></p>
+          </div>
+          <div class="col-12 col-md-6 text-md-end">
+            <p class="mb-1">Hari/Tanggal: <strong><span id="hdr-tanggal"></span></strong></p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-12 col-md-6">
+            <p class="mb-1">Kelas: <strong><span id="hdr-kelas"></span></strong></p>
+          </div>
+          <div class="col-12 col-md-6 text-md-end">
+            <p class="mb-1">Semester: <strong><span id="hdr-semester"></span></strong></p>
+          </div>
+        </div>
+      </header>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 id="student-name" class="fs-4 mb-0"></h2>
+        <div class="d-flex align-items-center gap-3">
+          <div class="countdown-box"><span id="timer">--:--</span></div>
+        </div>
+      </div>
+      <div id="q-content"></div>
+      <div class="d-flex justify-content-between mt-4">
+        <button id="btn-back" class="btn btn-secondary">&lt; Back</button>
+        <button id="btn-submit" class="btn btn-primary">Kirim Jawaban</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body text-center">Apakah Anda yakin dengan jawaban Anda?</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-notSure">Tidak Yakin</button>
+          <button type="button" class="btn btn-primary" id="btn-sure">Yakin</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fixed Footer -->
+  <footer class="fixed-footer">Uji Kesetaraan PKBM Kuntum Mekar Kecamatan Tapa</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+
+    function formatTanggalIndonesia(isoDateStr) {
+      const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const d = new Date(isoDateStr);
+      const namaHari = hari[d.getDay()];
+      const tanggal = d.getDate();
+      const namaBulan = bulan[d.getMonth()];
+      const tahun = d.getFullYear();
+      return `${namaHari}, ${tanggal} ${namaBulan} ${tahun}`;
+    }
+
+    // Sidebar toggle
+    const sidebar = document.getElementById('sidebar');
+    const content = document.getElementById('content');
+    document.getElementById('toggle-btn').addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+      content.classList.toggle('expanded');
+    });
+
+    const user = JSON.parse(sessionStorage.getItem('user')); if(!user) location='index.html';
+    const mapel = sessionStorage.getItem('mapel'); if(!mapel) location='mapel.html';
+    let questions = [], answers = {}, current = 0;
+    const base = 'https://script.google.com/macros/s/AKfycbweUxww34uk0pqPE-Gk_xaebgvxRNRCFicXy7I22gYTlt2xFi1uwrv1iK0FhTDEaw17/exec';
+    function jsonp(action, params){
+      return new Promise(res => {
+        const cb = 'cb_' + Date.now(); window[cb] = data => { res(data); delete window[cb]; };
+        const p = [`action=${action}`, ...Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(v)}`), `callback=${cb}`].join('&');
+        const s = document.createElement('script'); s.src = `${base}?${p}`; document.body.appendChild(s);
+      });
+    }
+    async function init(){
+      const jadwal = await jsonp('getJadwal', {kelas: user.kelas, mapel});
+      document.getElementById('hdr-mapel').textContent = mapel;
+      document.getElementById('hdr-kelas').textContent = user.kelas;
+      document.getElementById('hdr-tanggal').textContent = formatTanggalIndonesia(jadwal.tanggal);
+      document.getElementById('hdr-semester').textContent = jadwal.semester;
+      document.getElementById('student-name').textContent = user.nama;
+
+      startTimer(jadwal.waktuUjian);
+
+      const totalSec = jadwal.waktuUjian * 60;
+      const storageKey = `timer_${user.nama}_${user.kelas}_${mapel}`;
+      // Hitung endTime atau pakai yang tersimpan
+      let endTime = parseInt(localStorage.getItem(storageKey), 10);
+      if (!endTime || isNaN(endTime)) {
+        endTime = Date.now() + totalSec * 1000;
+        localStorage.setItem(storageKey, endTime);
+      }
+      const remaining = Math.max(0, Math.round((endTime - Date.now()) / 1000));
+      // Mulai timer dengan sisa detik, persistent across refresh
+      startTimer(remaining, storageKey);
+
+      const res = await jsonp('getSoal', {kelas: user.kelas, mapel});
+      questions = res.soalList;
+      renderSidebar(); renderQuestion();
+    }
+    // Mulai countdown dari sisa detik, key adalah storage key
+    function startTimer(remainingSec, storageKey) {
+      const tEl = document.getElementById('timer');
+      const beepTimes = [10, 5, 2].map(m => m * 60);
+      const iv = setInterval(() => {
+        // Jika habis, clear storage dan stop
+        if (remainingSec <= 0) {
+          clearInterval(iv);
+          localStorage.removeItem(storageKey);
+          showThankYou();
+          return;
+        }
+        // Update display
+        const m = Math.floor(remainingSec / 60), s = remainingSec % 60;
+        tEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        if (beepTimes.includes(remainingSec)) new Audio('beep.mp3').play();
+        remainingSec--;
+      }, 1000);
+    }
+    function renderSidebar(){
+      const sb = document.getElementById('q-buttons'); sb.innerHTML='';
+      questions.forEach((q,i)=>{
+        const b = document.createElement('button');
+        b.className='btn btn-sm'; b.textContent=i+1;
+        b.style.backgroundColor = answers[i]!==undefined ? 'green' : 'red';
+        b.onclick = () => { current=i; renderQuestion(); }; sb.append(b);
+      });
+    }
+    function renderQuestion(){
+      const q = questions[current];
+      const c = document.getElementById('q-content');
+      let html = `<div><strong>Soal ${current+1}:</strong> ${q.soal}</div>`;
+      if(q.gambar) html += `<img src="${q.gambar}" class="img-fluid my-2">`;
+      html += '<div class="list-group">';
+      q.options.forEach((opt, idx) => {
+        const letter = String.fromCharCode(65+idx);
+        const sel = answers[current]===letter;
+        html += `<label class="list-group-item${sel?' active':''}">`+
+                `<input type="radio" name="option" value="${letter}" ${sel? 'checked':''}/> ${letter}. ${opt}`+
+                `</label>`;
+      });
+      html += '</div>';
+      c.innerHTML = html;
+      document.getElementById('btn-back').style.visibility = current? 'visible':'hidden';
+    }
+    document.getElementById('btn-back').onclick = () => {
+      saveAnswer(); if(current>0) current--; renderSidebar(); renderQuestion();
+    };
+    document.getElementById('btn-submit').onclick = () => {
+      saveAnswer();
+      if(current < questions.length-1) {
+        current++;
+        renderSidebar(); renderQuestion();
+      } else {
+        showConfirm();
+      }
+    };
+    function saveAnswer(){
+      const sel = document.querySelector('input[name="option"]:checked');
+      if(sel) answers[current] = sel.value;
+      renderSidebar();
+    }
+    function showConfirm(){
+      const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+      modal.show();
+      document.getElementById('btn-notSure').onclick = () => modal.hide();
+      document.getElementById('btn-sure').onclick = async () => {
+        modal.hide();
+        await submitAll();
+        showThankYou();
+      };
+    }
+    async function submitAll(){
+      // Susun jawaban jadi string A,B,C,...
+      const answerList = questions.map((_, idx) => answers[idx] || '');
+      const jawabanStr = answerList.join(',');
+      // Kirim via JSONP untuk menghindari CORS
+      await jsonp('submit', {
+        nama: user.nama,
+        nisn: user.nisn,
+        kelas: user.kelas,
+        mapel,
+        jawaban: jawabanStr
+      });
+    }
+    function showThankYou(){
+      const overlay = document.createElement('div');
+      Object.assign(overlay.style, {
+        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000
+      });
+      overlay.innerHTML = `<h3>Terima Kasih ${user.nama} telah mengerjakan Soal ${mapel}</h3>`;
+      document.body.appendChild(overlay);
+      setTimeout(() => { document.body.removeChild(overlay); window.location = 'index.html'; }, 5000);
+    }
+    init();
+  </script>
+</body>
+</html>
