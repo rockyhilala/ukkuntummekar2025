@@ -177,6 +177,7 @@
         const result = await loginViaJSONP(nama, nisn, kelas);
         if (result.success) {
           sessionStorage.setItem('user', JSON.stringify({ nama, nisn, kelas }));
+          sessionStorage.setItem('foto', result.foto); // 🔑 Simpan foto
           window.location.href = 'mapel.html';
         } else {
           hideLoading();
